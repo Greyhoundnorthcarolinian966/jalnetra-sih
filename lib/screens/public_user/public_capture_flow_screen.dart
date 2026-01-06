@@ -481,7 +481,7 @@ class _PublicCaptureFlowScreenState extends State<PublicCaptureFlowScreen> {
         siteId: _scannedQRData!.siteId,
         officerId: user.uid, // Public User's UID
         waterLevel: waterLevel, // Manual value (possibly auto-filled)
-        imageUrl: '',
+        imagePath: '',
         location: GeoPoint(
           _currentPosition!.latitude,
           _currentPosition!.longitude,

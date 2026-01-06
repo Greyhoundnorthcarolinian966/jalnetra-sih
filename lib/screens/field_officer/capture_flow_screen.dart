@@ -574,7 +574,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
         siteId: _scannedQRData!.siteId,
         officerId: user.uid,
         waterLevel: autoLevel, // ✅ store AUTO as main value
-        imageUrl: '',
+        imagePath: '',
         location: GeoPoint(
           _currentPosition!.latitude,
           _currentPosition!.longitude,

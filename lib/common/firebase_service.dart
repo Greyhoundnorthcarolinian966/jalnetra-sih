@@ -9,19 +9,20 @@ import 'package:flutter/material.dart';
 
 import 'package:jalnetra01/models/reading_model.dart';
 import 'package:jalnetra01/models/user_models.dart';
-
 import '../firebase_options.dart';
 
 class FirebaseService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Storage instance for the configured bucket
+  /// Explicit storage bucket (safe for all platforms)
   late final FirebaseStorage _storage = FirebaseStorage.instanceFor(
     bucket: DefaultFirebaseOptions.currentPlatform.storageBucket,
   );
 
-  // ───────── AUTH & USER MGMT ─────────
+  // ─────────────────────────────────────────────
+  // AUTH & USER MANAGEMENT
+  // ─────────────────────────────────────────────
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
@@ -55,16 +56,14 @@ class FirebaseService {
         designation: designation,
       );
 
-      // Account verification flag for admin approval
-      final userMap = appUser.toMap()..['isAccountVerified'] = false;
+      await _firestore.collection('users').doc(user.uid).set({
+        ...appUser.toMap(),
+        'isAccountVerified': false,
+      });
 
-      await _firestore.collection('users').doc(user.uid).set(userMap);
       return appUser;
-    } on FirebaseAuthException catch (e) {
-      debugPrint('Sign Up Auth Error: ${e.code} - ${e.message}');
-      rethrow;
     } catch (e) {
-      debugPrint('Sign Up Error: $e');
+      debugPrint('❌ SignUp Error: $e');
       rethrow;
     }
   }
@@ -77,7 +76,7 @@ class FirebaseService {
       );
       return await getUserData(result.user!.uid);
     } catch (e) {
-      debugPrint('Sign In Error: $e');
+      debugPrint('❌ SignIn Error: $e');
       return null;
     }
   }
@@ -89,61 +88,31 @@ class FirebaseService {
   Future<AppUser?> getUserData(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return AppUser.fromMap(data);
-      }
-      return null;
+      if (!doc.exists) return null;
+
+      final data = doc.data()!;
+      data['id'] = doc.id;
+      return AppUser.fromMap(data);
     } catch (e) {
-      debugPrint('Get User Data Error: $e');
+      debugPrint('❌ GetUserData Error: $e');
       return null;
     }
   }
 
-  // ───────── SOS IMPLEMENTATION ─────────
-
-  Future<void> sendSosNotification({
-    required String userEmail,
-    required String message,
-  }) async {
-    try {
-      final currentUserId = _auth.currentUser?.uid;
-
-      if (currentUserId == null) {
-        throw Exception("SOS sender is not authenticated.");
-      }
-
-      await _firestore.collection('sos_alerts').add({
-        'senderId': currentUserId,
-        'senderEmail': userEmail,
-        'message': message,
-        'timestamp': FieldValue.serverTimestamp(),
-        'status': 'New',
-        'alertedRoles': [
-          UserRole.fieldOfficer.toString().split('.').last,
-          UserRole.supervisor.toString().split('.').last,
-        ],
-      });
-      debugPrint('✅ SOS Alert logged by $userEmail');
-    } catch (e) {
-      debugPrint('🔥 SOS Notification Error: $e');
-      rethrow;
-    }
-  }
-
-  // ───────── ADMIN USER MANAGEMENT ─────────
+  // ─────────────────────────────────────────────
+  // ADMIN USER MANAGEMENT
+  // ─────────────────────────────────────────────
 
   Stream<List<AppUser>> getUsersByRole(UserRole role) {
-    final roleString = role.toString().split('.').last;
+    final roleStr = role.toString().split('.').last;
     return _firestore
         .collection('users')
-        .where('role', isEqualTo: roleString)
+        .where('role', isEqualTo: roleStr)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            data['id'] = doc.id;
+          (snap) => snap.docs.map((d) {
+            final data = d.data();
+            data['id'] = d.id;
             return AppUser.fromMap(data);
           }).toList(),
         );
@@ -155,104 +124,103 @@ class FirebaseService {
         .where('isAccountVerified', isEqualTo: false)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            data['id'] = doc.id;
+          (snap) => snap.docs.map((d) {
+            final data = d.data();
+            data['id'] = d.id;
             return AppUser.fromMap(data);
           }).toList(),
         );
   }
 
-  Future<void> removeUser(String userId) async {
-    await _firestore.collection('users').doc(userId).delete();
-  }
-
-  Future<void> updateUserRole(
-    String uid,
-    UserRole newRole,
-    bool isVerified,
-  ) async {
+  Future<void> updateUserRole(String uid, UserRole role, bool verified) async {
     await _firestore.collection('users').doc(uid).update({
-      'role': newRole.toString().split('.').last,
-      'isAccountVerified': isVerified,
+      'role': role.toString().split('.').last,
+      'isAccountVerified': verified,
     });
   }
 
-  // ───────── READING SUBMISSION (OFFICER + PUBLIC) ─────────
+  // ─────────────────────────────────────────────
+  // SOS ALERT (PUBLIC USER)
+  // ─────────────────────────────────────────────
 
-  /// Field Officer / internal flow → writes to /readings
-  Future<void> submitReading(WaterReading reading, File photoFile) async {
-    await _submitReadingToCollection(
-      collectionName: 'readings',
-      reading: reading,
-      photoFile: photoFile,
-    );
-  }
-
-  /// Public flow → writes to /public_readings
-  Future<void> submitPublicReading(WaterReading reading, File photoFile) async {
-    await _submitReadingToCollection(
-      collectionName: 'public_readings',
-      reading: reading,
-      photoFile: photoFile,
-    );
-  }
-
-  /// Shared logic for uploading file + creating Firestore doc.
-  /// This is where the **correct Firebase Storage download URL** is created.
-  Future<void> _submitReadingToCollection({
-    required String collectionName,
-    required WaterReading reading,
-    required File photoFile,
+  Future<void> sendSosNotification({
+    required String userEmail,
+    required String message,
   }) async {
     try {
-      // Ensure user is logged in
-      final user = _auth.currentUser;
-      if (user == null) {
-        throw FirebaseException(
-          plugin: 'firebase_storage',
-          code: 'unauthenticated',
-          message: 'User is not signed in while uploading.',
-        );
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('User not authenticated for SOS');
       }
 
-      // Sanitize path components
-      final safeSiteId = reading.siteId
-          .replaceAll(RegExp(r'[#\[\]\.\/\\]'), '')
-          .trim();
+      await _firestore.collection('sos_alerts').add({
+        'senderId': currentUser.uid,
+        'senderEmail': userEmail,
+        'message': message,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 'NEW',
+        'alertedRoles': [UserRole.fieldOfficer.name, UserRole.supervisor.name],
+      });
 
-      final safeTimestamp = DateTime.now().toIso8601String().replaceAll(
-        RegExp(r'[^a-zA-Z0-9]'),
-        '',
-      );
+      debugPrint('🚨 SOS alert sent by $userEmail');
+    } catch (e, st) {
+      debugPrint('❌ SOS Error: $e');
+      debugPrint('$st');
+      rethrow;
+    }
+  }
 
-      final officerIdForFile = user.uid;
-      final fileName = '${officerIdForFile}_$safeTimestamp.jpg';
-      final filePath = '$collectionName/$safeSiteId/$fileName';
+  // ─────────────────────────────────────────────
+  // READING SUBMISSION (FIELD OFFICER & PUBLIC)
+  // ─────────────────────────────────────────────
 
-      debugPrint('📤 Uploading to: $filePath');
+  Future<void> submitReading(WaterReading reading, File imageFile) async {
+    await _submitReadingInternal(
+      collectionName: 'readings',
+      reading: reading,
+      imageFile: imageFile,
+    );
+  }
 
-      final ref = _storage.ref(filePath);
+  Future<void> submitPublicReading(WaterReading reading, File imageFile) async {
+    await _submitReadingInternal(
+      collectionName: 'public_readings',
+      reading: reading,
+      imageFile: imageFile,
+    );
+  }
 
-      // Upload JPEG with content type
-      final uploadTask = ref.putFile(
-        photoFile,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
+  /// 🔥 CORE upload + Firestore write logic
+  Future<void> _submitReadingInternal({
+    required String collectionName,
+    required WaterReading reading,
+    required File imageFile,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw Exception('User not authenticated');
+      }
 
-      final snapshot = await uploadTask;
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-      debugPrint('✅ Uploaded. URL: $downloadUrl');
+      final safeSiteId = reading.siteId.replaceAll(RegExp(r'[^\w\-]'), '');
+      final safeTime = DateTime.now().millisecondsSinceEpoch.toString();
 
-      // Create Firestore doc
+      final fileName = '${user.uid}_$safeTime.jpg';
+      final imagePath = '$collectionName/$safeSiteId/$fileName';
+
+      debugPrint('📤 Uploading image to: $imagePath');
+
+      final ref = _storage.ref(imagePath);
+      await ref.putFile(imageFile, SettableMetadata(contentType: 'image/jpeg'));
+
       final docRef = _firestore.collection(collectionName).doc();
 
       final finalReading = WaterReading(
         id: docRef.id,
         siteId: reading.siteId,
-        officerId: user.uid, // enforced from auth
+        officerId: user.uid,
         waterLevel: reading.waterLevel,
-        imageUrl: downloadUrl, // THIS is the valid URL used in dashboard
+        imagePath: imagePath,
         location: reading.location,
         timestamp: reading.timestamp,
         isVerified: false,
@@ -260,23 +228,31 @@ class FirebaseService {
       );
 
       await docRef.set(finalReading.toMap());
-    } on FirebaseException catch (e, st) {
-      debugPrint('🔥 Firebase Storage/Firestore error');
-      debugPrint('  code   : ${e.code}');
-      debugPrint('  message: ${e.message}');
-      debugPrint('  plugin : ${e.plugin}');
-      debugPrint('  stack  : ${e.stackTrace ?? st}');
-      rethrow;
+
+      debugPrint('✅ Reading saved with imagePath');
     } catch (e, st) {
-      debugPrint('Submit Reading Error (non-Firebase): $e');
-      debugPrint('Stacktrace: $st');
+      debugPrint('🔥 SubmitReading Error: $e');
+      debugPrint('$st');
       rethrow;
     }
   }
 
-  // ───────── SUPERVISOR / ANALYST ─────────
+  // ─────────────────────────────────────────────
+  // REMOVE USER (ADMIN ONLY)
+  // ─────────────────────────────────────────────
+  Future<void> removeUser(String userId) async {
+    try {
+      // 1️⃣ Remove user document from Firestore
+      await _firestore.collection('users').doc(userId).delete();
 
-  /// Stream for the 'Community Inputs' queue (unverified readings from OFFICERS).
+      debugPrint('🗑️ User removed from Firestore: $userId');
+    } catch (e, st) {
+      debugPrint('❌ RemoveUser Error: $e');
+      debugPrint('$st');
+      rethrow;
+    }
+  }
+
   Stream<List<WaterReading>> getCommunityInputs() {
     return _firestore
         .collection('readings')
@@ -285,20 +261,10 @@ class FirebaseService {
         .snapshots()
         .map(
           (snap) =>
-              snap.docs.map((doc) => WaterReading.fromFirestore(doc)).toList(),
+              snap.docs.map((d) => WaterReading.fromFirestore(d)).toList(),
         );
   }
 
-  Future<void> updateVerificationStatus(
-    String readingId,
-    bool isVerified,
-  ) async {
-    await _firestore.collection('readings').doc(readingId).update({
-      'isVerified': isVerified,
-    });
-  }
-
-  /// All verified readings (for history + trends)
   Stream<List<WaterReading>> getAllVerifiedReadings() {
     return _firestore
         .collection('readings')
@@ -307,7 +273,13 @@ class FirebaseService {
         .snapshots()
         .map(
           (snap) =>
-              snap.docs.map((doc) => WaterReading.fromFirestore(doc)).toList(),
+              snap.docs.map((d) => WaterReading.fromFirestore(d)).toList(),
         );
+  }
+
+  Future<void> updateVerificationStatus(String readingId, bool verified) async {
+    await _firestore.collection('readings').doc(readingId).update({
+      'isVerified': verified,
+    });
   }
 }
